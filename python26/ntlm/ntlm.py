@@ -173,7 +173,7 @@ def dump_NegotiateFlags(NegotiateFlags):
     if NegotiateFlags & NTLM_Negotiate56:
         print "NTLM_Negotiate56 set"                    
 
-def create_NTLM_NEGOTIATE_MESSAGE(user, type1_flags=NTLM_TYPE1_FLAGS):
+def create_NTLM_NEGOTIATE_MESSAGE_raw(workstation, domain, type1_flags=NTLM_TYPE1_FLAGS):
     BODY_LENGTH = 40
     Payload_start = BODY_LENGTH # in bytes
     protocol = 'NTLMSSP\0'    #name        
@@ -181,9 +181,8 @@ def create_NTLM_NEGOTIATE_MESSAGE(user, type1_flags=NTLM_TYPE1_FLAGS):
     type = struct.pack('<I',1) #type 1
     
     flags =  struct.pack('<I', type1_flags)
-    Workstation = gethostname().upper().encode('ascii')
-    user_parts = user.split('\\', 1)
-    DomainName = user_parts[0].upper().encode('ascii')
+    Workstation = workstation.upper().encode('ascii')
+    DomainName = domain.upper().encode('ascii')
     EncryptedRandomSessionKey = ""
     
     
@@ -210,13 +209,18 @@ def create_NTLM_NEGOTIATE_MESSAGE(user, type1_flags=NTLM_TYPE1_FLAGS):
             VersionReserved1 + VersionReserved2 + VersionReserved3 + NTLMRevisionCurrent
     assert BODY_LENGTH==len(msg1), "BODY_LENGTH: %d != msg1: %d" % (BODY_LENGTH,len(msg1))
     msg1 += Workstation + DomainName
+    return msg1
+
+def create_NTLM_NEGOTIATE_MESSAGE(user, type1_flags=NTLM_TYPE1_FLAGS):
+    workstation = gethostname()
+    user_parts = user.split('\\', 1)
+    msg1 = create_NTLM_NEGOTIATE_MESSAGE_raw(workstation, user_parts[0], type1_flags)
     msg1 = base64.encodestring(msg1)
     msg1 = string.replace(msg1, '\n', '')
     return msg1
     
-def parse_NTLM_CHALLENGE_MESSAGE(msg2):
+def parse_NTLM_CHALLENGE_MESSAGE_raw(msg2):
     ""
-    msg2 = base64.decodestring(msg2)
     Signature = msg2[0:8]
     msg_type = struct.unpack("<I",msg2[8:12])[0]
     assert(msg_type==2)
@@ -243,7 +247,10 @@ def parse_NTLM_CHALLENGE_MESSAGE(msg2):
         #~ print AvId, AvValue.decode('utf-16')
     return (ServerChallenge, NegotiateFlags)
 
-def create_NTLM_AUTHENTICATE_MESSAGE(nonce, user, domain, password, NegotiateFlags):
+def parse_NTLM_CHALLENGE_MESSAGE(msg2):
+    return parse_NTLM_CHALLENGE_MESSAGE(base64.decodestring(msg2))
+
+def create_NTLM_AUTHENTICATE_MESSAGE_raw(nonce, user, domain, password, NegotiateFlags):
     ""
     is_unicode  = NegotiateFlags & NTLM_NegotiateUnicode
     is_NegotiateExtendedSecurity = NegotiateFlags & NTLM_NegotiateExtendedSecurity
@@ -328,6 +335,10 @@ def create_NTLM_AUTHENTICATE_MESSAGE(nonce, user, domain, password, NegotiateFla
     assert BODY_LENGTH==len(msg3), "BODY_LENGTH: %d != msg3: %d" % (BODY_LENGTH,len(msg3))
     Payload = DomainName + UserName + Workstation + LmChallengeResponse + NtChallengeResponse + EncryptedRandomSessionKey
     msg3 += Payload
+    return msg3
+
+def create_NTLM_AUTHENTICATE_MESSAGE(nonce, user, domain, password, NegotiateFlags):
+    msg3 = create_NTLM_AUTHENTICATE_MESSAGE(nonce, user, domain, password, NegotiateFlags)
     msg3 = base64.encodestring(msg3)
     msg3 = string.replace(msg3, '\n', '')
     return msg3
