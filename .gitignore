@@ -1,3 +1,4 @@
 *.pyc
+*.swp
 python26/dist
 python26/python_ntlm.egg-info
